@@ -361,6 +361,21 @@ generate-connectors-client: tools ## generate Kibana connectors client
 	@ cd tools && go generate
 	@ go fmt ./generated/connectors/...
 
+.PHONY: generate-security-detections-client
+generate-security-detections-client: ## generate Kibana Detection Engine client
+	@ docker run --rm -v "${PWD}:/local" openapitools/openapi-generator-cli:v7.0.1 generate \
+		-i /local/generated/detections/bundled.yaml \
+		--skip-validate-spec \
+		--git-repo-id terraform-provider-elasticstack \
+		--git-user-id elastic \
+		-p isGoSubmodule=true \
+		-p packageName=detections \
+		-p generateInterfaces=true \
+		-g go \
+		-o /local/generated/detections
+	@ rm -rf generated/detections/go.mod generated/detections/go.sum generated/detections/test
+	@ go fmt ./generated/detections/...
+
 .PHONY: generate-slo-client
 generate-slo-client: tools ## generate Kibana slo client
 	@ rm -rf generated/slo
@@ -379,4 +394,4 @@ generate-slo-client: tools ## generate Kibana slo client
 	@ go fmt ./generated/...
 
 .PHONY: generate-clients
-generate-clients: generate-alerting-client generate-slo-client generate-data-views-client generate-connectors-client ## generate all clients
+generate-clients: generate-alerting-client generate-slo-client generate-data-views-client generate-connectors-client generate-security-detections-client ## generate all clients

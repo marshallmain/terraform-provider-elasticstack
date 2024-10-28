@@ -13,6 +13,7 @@ import (
 	"github.com/elastic/terraform-provider-elasticstack/generated/alerting"
 	"github.com/elastic/terraform-provider-elasticstack/generated/connectors"
 	"github.com/elastic/terraform-provider-elasticstack/generated/data_views"
+	"github.com/elastic/terraform-provider-elasticstack/generated/detections"
 	"github.com/elastic/terraform-provider-elasticstack/generated/slo"
 	"github.com/elastic/terraform-provider-elasticstack/internal/clients/config"
 	"github.com/elastic/terraform-provider-elasticstack/internal/clients/fleet"
@@ -69,6 +70,7 @@ type ApiClient struct {
 	kibana                   *kibana.Client
 	alerting                 alerting.AlertingAPI
 	dataViews                data_views.DataViewsAPI
+	detections               detections.SecurityDetectionsAPI
 	connectors               *connectors.Client
 	slo                      slo.SloAPI
 	kibanaConfig             kibana.Config
@@ -250,6 +252,14 @@ func (a *ApiClient) GetDataViewsClient() (data_views.DataViewsAPI, error) {
 	return a.dataViews, nil
 }
 
+func (a *ApiClient) GetDetectionsClient() (detections.SecurityDetectionsAPI, error) {
+	if a.detections == nil {
+		return nil, errors.New("detections client not found")
+	}
+
+	return a.detections, nil
+}
+
 func (a *ApiClient) GetKibanaConnectorsClient(ctx context.Context) (*connectors.Client, error) {
 	if a.connectors == nil {
 		return nil, errors.New("kibana action connector client not found")
@@ -313,6 +323,21 @@ func (a *ApiClient) SetDataviewAuthContext(ctx context.Context) context.Context 
 			}})
 	} else {
 		return context.WithValue(ctx, data_views.ContextBasicAuth, data_views.BasicAuth{
+			UserName: a.kibanaConfig.Username,
+			Password: a.kibanaConfig.Password,
+		})
+	}
+}
+
+func (a *ApiClient) SetDetectionsAuthContext(ctx context.Context) context.Context {
+	if a.kibanaConfig.ApiKey != "" {
+		return context.WithValue(ctx, detections.ContextAPIKeys, map[string]detections.APIKey{
+			"apiKeyAuth": {
+				Prefix: "ApiKey",
+				Key:    a.kibanaConfig.ApiKey,
+			}})
+	} else {
+		return context.WithValue(ctx, detections.ContextBasicAuth, detections.BasicAuth{
 			UserName: a.kibanaConfig.Username,
 			Password: a.kibanaConfig.Password,
 		})
@@ -464,6 +489,19 @@ func buildDataViewsClient(cfg config.Client, httpClient *http.Client) *data_view
 	return data_views.NewAPIClient(&dvConfig)
 }
 
+func buildDetectionsClient(cfg config.Client, httpClient *http.Client) *detections.APIClient {
+	detectionsConfig := detections.Configuration{
+		UserAgent: cfg.UserAgent,
+		Servers: detections.ServerConfigurations{
+			{
+				URL: cfg.Kibana.Address,
+			},
+		},
+		HTTPClient: httpClient,
+	}
+	return detections.NewAPIClient(&detectionsConfig)
+}
+
 func buildConnectorsClient(cfg config.Client, httpClient *http.Client) (*connectors.Client, error) {
 	var authInterceptor connectors.ClientOption
 	if cfg.Kibana.ApiKey != "" {
@@ -556,6 +594,7 @@ func newApiClientFromConfig(cfg config.Client, version string) (*ApiClient, erro
 		client.kibana = kibanaClient
 		client.alerting = buildAlertingClient(cfg, kibanaHttpClient).AlertingAPI
 		client.dataViews = buildDataViewsClient(cfg, kibanaHttpClient).DataViewsAPI
+		client.detections = buildDetectionsClient(cfg, kibanaHttpClient).SecurityDetectionsAPI
 		client.slo = buildSloClient(cfg, kibanaHttpClient).SloAPI
 		client.connectors = connectorsClient
 	}
